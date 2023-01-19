@@ -11,10 +11,14 @@ router.post(
     body("name", "Name should be minimum 3 characters long").isLength({
       min: 3,
     }),
+    body("aadhar", "Aadhar Card should be 12 characters long").isLength({
+      min: 12,
+      max: 12,
+    }),
     body(
-      "aadharCardNumber",
-      "Aadhar Card should be minimum 10 characters long"
-    ).isLength({ min: 10 }),
+      "account",
+      "Account Number should be minimum 3 and max 20 characters long"
+    ).isLength({ min: 3, max: 20 }),
   ],
   async (req, res) => {
     // Finds the validation errors in this request and wraps them in an object with handy functions
@@ -34,12 +38,14 @@ router.post(
       }
       employee = await Employee.create({
         name: req.body.name,
-        aadharCardNumber: req.body.aadharCardNumber,
-        accountNumber: req.body.accountNumber,
-        esicNumber: req.body.esicNumber,
-        epfNumber: req.body.epfNumber,
-        ifscCode: req.body.ifscCode,
-        birthDate: req.body.birthDate,
+        aadharCardNumber: req.body.aadhar,
+        accountNumber: req.body.account,
+        esicNumber: req.body.esic,
+        epfNumber: req.body.epf,
+        ifscCode: req.body.ifsc,
+        sex: req.body.sex,
+        birthDate: req.body.birthdate,
+        createdDate: Date.now(),
       });
       res.json(employee);
     } catch (error) {
@@ -89,8 +95,8 @@ router.put("/:id", async (req, resp) => {
     if (ifscCode) {
       newEmployee.ifscCode = ifscCode;
     }
-    if (birthDate) {
-      newEmployee.birthDate = birthDate;
+    if (sex) {
+      newEmployee.sex = sex;
     }
     let employee = await Employee.findByIdAndUpdate(
       req.params.id,

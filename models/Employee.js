@@ -12,7 +12,11 @@ const EmployeeSchema = new Schema({
     unique: true,
   },
   accountNumber: {
-    type: Number,
+    type: String,
+    required: true,
+  },
+  ifscCode: {
+    type: String,
   },
   esicNumber: {
     type: String,
@@ -20,12 +24,22 @@ const EmployeeSchema = new Schema({
   epfNumber: {
     type: String,
   },
-  ifscCode: {
+  sex: {
     type: String,
   },
   birthDate: {
     type: Date,
-    default: Date.now,
+  },
+  createdDate: {
+    type: Date,
+  },
+  updatedDate: {
+    type: Date,
+    default: Date.now(),
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
   },
 });
 const employee = mongoose.model("employee", EmployeeSchema);
