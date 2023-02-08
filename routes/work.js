@@ -230,7 +230,6 @@ router.post("/employeeadd", async (req, resp) => {
               dateTo: formatDate(workEmpList[j].dateTo),
             };
             empFoundDetailsList.push(empDetails);
-            break;
           }
         }
         if (!empFound) {
