@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Employee = require("../models/Employee");
+const Work = require("../models/Work");
 const { body, validationResult } = require("express-validator");
 const mongoose = require("mongoose");
 
@@ -105,6 +106,27 @@ router.post("/update", async (req, resp) => {
 //with this request isDeleted will be set to true for an employee- soft delete
 router.post("/delete/:id", async (req, resp) => {
   try {
+    let works = await Work.find({ isDeleted: false });
+    if (works && works.length > 0) {
+      var abort = false;
+      works.map((work) => {
+        if (work.employees && work.employees.length > 0 && !abort) {
+          work.employees.map((wemp) => {
+            if (!abort && wemp.id.equals(req.params.id)) {
+              abort = true;
+            }
+          });
+        }
+      });
+      if (abort) {
+        return resp.status(999).json({
+          errorlist: [
+            "Can not delete employee because employee is working in a work",
+          ],
+        });
+      }
+    }
+
     let employee = await Employee.findByIdAndUpdate(
       req.params.id,
       {

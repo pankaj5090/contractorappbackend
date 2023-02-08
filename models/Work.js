@@ -18,6 +18,9 @@ const WorkSchema = new Schema({
   fdrBankGuaranteeNo: {
     type: String,
   },
+  fdrBankName: {
+    type: String,
+  },
   guaranteeAmount: {
     type: Number,
   },
@@ -52,6 +55,8 @@ const WorkSchema = new Schema({
       id: mongoose.ObjectId,
       dateFrom: Date,
       dateTo: Date,
+      createdDate: Date,
+      updatedDate: Date,
     },
   ],
 });

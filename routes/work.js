@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Work = require("../models/Work");
+const Employee = require("../models/Employee");
 const { body, validationResult } = require("express-validator");
 const mongoose = require("mongoose");
 
@@ -75,6 +76,7 @@ router.post("/update", async (req, resp) => {
       division: newWork.division,
       allottedDate: newWork.allottedDate,
       fdrBankGuaranteeNo: newWork.fdrBankGuaranteeNo,
+      fdrBankName: newWork.fdrBankName,
       guaranteeAmount: newWork.guaranteeAmount,
       estimatedCost: newWork.estimatedCost,
       contractorCost: newWork.contractorCost,
@@ -158,26 +160,116 @@ router.post("/employeeadd", async (req, resp) => {
     var dateFrom = req.body.dateFrom;
     var dateTo = req.body.dateTo;
     var addedEmployees = [];
-    for (let i = 0; i < employees.length; i++) {
-      let employee = {
-        id: employees[i],
-        dateFrom: dateFrom,
-        dateTo: dateTo,
-      };
-      addedEmployees.push(employee);
+    let works = await Work.find({
+      "employees.id": { $in: employees },
+      isDeleted: false,
+    });
+    let emps = await Employee.find({
+      _id: { $in: employees },
+      isDeleted: false,
+    });
+
+    const empObj = new Map();
+    if (emps && emps.length > 0) {
+      emps.map((emp) => {
+        empObj.set(emp._id.toString(), emp);
+      });
     }
-    Work.findByIdAndUpdate(
-      workId,
-      { $addToSet: { employees: addedEmployees } },
-      { safe: true, upsert: true },
-      function (err, model) {
-        if (err) {
-          console.log(err);
-          return resp.send(err);
+
+    const workEmpObj = new Map();
+    if (works && works.length > 0) {
+      works.map((work) => {
+        if (work.employees && work.employees.length > 0) {
+          work.employees.map((wemp) => {
+            var emp = empObj.get(wemp.id.toString());
+            if (emp) {
+              let workEmp = {
+                id: wemp.id,
+                workName: work.name,
+                division: work.division,
+                empName: emp.name,
+                aadhar: emp.aadharCardNumber,
+                dateFrom: wemp.dateFrom.toISOString(),
+                dateTo: wemp.dateTo.toISOString(),
+              };
+              var workEmpList = workEmpObj.get(emp.id);
+              if (workEmpList) {
+                workEmpList.push(workEmp);
+                workEmpObj.set(emp.id, workEmpList);
+              } else {
+                var newWorkEmpList = [workEmp];
+                workEmpObj.set(emp.id, newWorkEmpList);
+              }
+            }
+          });
         }
-        return resp.json(model);
+      });
+    }
+    var empFoundDetailsList = [];
+    for (let i = 0; i < employees.length; i++) {
+      var workEmpList = workEmpObj.get(employees[i]);
+      if (workEmpList && workEmpList.length > 0) {
+        var empFound = false;
+        for (var j = 0; j < workEmpList.length; j++) {
+          var empDateFrom = formatDate(workEmpList[j].dateFrom);
+          var empDateTo = formatDate(workEmpList[j].dateTo);
+          if (
+            (new Date(dateFrom) >= new Date(empDateFrom) &&
+              new Date(dateFrom) <= new Date(empDateTo)) ||
+            (new Date(dateTo) >= new Date(empDateFrom) &&
+              new Date(dateTo) <= new Date(empDateTo))
+          ) {
+            empFound = true;
+            empDetails = {
+              id: workEmpList[j].id,
+              workName: workEmpList[j].workName,
+              division: workEmpList[j].division,
+              empName: workEmpList[j].empName,
+              aadhar: workEmpList[j].aadhar,
+              dateFrom: formatDate(workEmpList[j].dateFrom),
+              dateTo: formatDate(workEmpList[j].dateTo),
+            };
+            empFoundDetailsList.push(empDetails);
+            break;
+          }
+        }
+        if (!empFound) {
+          let employee = {
+            id: employees[i],
+            dateFrom: dateFrom,
+            dateTo: dateTo,
+            createdDate: Date.now(),
+            updatedDate: Date.now(),
+          };
+          addedEmployees.push(employee);
+        }
+      } else {
+        let employee = {
+          id: employees[i],
+          dateFrom: dateFrom,
+          dateTo: dateTo,
+          createdDate: Date.now(),
+          updatedDate: Date.now(),
+        };
+        addedEmployees.push(employee);
       }
-    );
+    }
+    if (empFoundDetailsList && empFoundDetailsList.length > 0) {
+      return resp.status(999).send({ employeeFound: empFoundDetailsList });
+    } else {
+      Work.findByIdAndUpdate(
+        workId,
+        { $addToSet: { employees: addedEmployees } },
+        { safe: true, upsert: true },
+        function (err, model) {
+          if (err) {
+            console.log(err);
+            return resp.send(err);
+          }
+          return resp.json(model);
+        }
+      );
+    }
   } catch (error) {
     console.error(error.message);
     resp.status(500).send("Something went wrong");
@@ -189,7 +281,7 @@ router.post("/employeedelete", async (req, resp) => {
   try {
     let empWork = await Work.findOneAndUpdate(
       { _id: req.body.workId },
-      { $pull: { employees: { id: req.body.empId } } },
+      { $pull: { employees: { _id: req.body.empId } } },
       { safe: true, multi: false }
     );
     if (!empWork) {
@@ -207,12 +299,49 @@ router.post("/employeeupdate", async (req, resp) => {
   try {
     const workId = req.body.workId;
     const employeeId = req.body.employeeId;
+    const empIdWithWork = req.body.empIdWithWork;
+    let works = await Work.find({
+      "employees.id": employeeId,
+      "employees._id": { $ne: empIdWithWork },
+      isDeleted: false,
+    });
+    if (works && works.length > 0) {
+      var abort = false;
+      for (let i = 0; i < works.length && !abort; i++) {
+        if (works[i].employees && works[i].employees.length > 0) {
+          for (let j = 0; j < works[i].employees.length && !abort; j++) {
+            var empDateFrom = formatDate(
+              works[i].employees[j].dateFrom.toISOString()
+            );
+            var empDateTo = formatDate(
+              works[i].employees[j].dateTo.toISOString()
+            );
+            if (
+              works[i].employees[j].id.equals(employeeId) &&
+              !works[i].employees[j]._id.equals(empIdWithWork) &&
+              ((new Date(req.body.dateFrom) >= new Date(empDateFrom) &&
+                new Date(req.body.dateFrom) <= new Date(empDateTo)) ||
+                (new Date(req.body.dateTo) >= new Date(empDateFrom) &&
+                  new Date(req.body.dateTo) <= new Date(empDateTo)))
+            ) {
+              return resp.status(999).send({
+                errorlist: [
+                  "Employee already working in some work for this time period.",
+                ],
+              });
+              abort = true;
+            }
+          }
+        }
+      }
+    }
     const updateWork = await Work.findOneAndUpdate(
-      { _id: workId, "employees.id": employeeId },
+      { _id: workId, "employees.id": employeeId, isDeleted: false },
       {
         $set: {
           "employees.$.dateFrom": req.body.dateFrom,
           "employees.$.dateTo": req.body.dateTo,
+          "employees.$.updatedDate": Date.now(),
         },
       }
     );
@@ -225,5 +354,10 @@ router.post("/employeeupdate", async (req, resp) => {
     resp.status(500).send("Something went wrong");
   }
 });
+const formatDate = (stringDate) => {
+  if (stringDate) {
+    return stringDate.substring(0, stringDate.indexOf("T"));
+  }
+};
 
 module.exports = router;
