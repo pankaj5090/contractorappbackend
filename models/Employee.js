@@ -30,6 +30,18 @@ const EmployeeSchema = new Schema({
   birthDate: {
     type: Date,
   },
+  origAadharFile: {
+    type: String,
+  },
+  aadharFile: {
+    type: String,
+  },
+  origPassBookFile: {
+    type: String,
+  },
+  passBookFile: {
+    type: String,
+  },
   createdDate: {
     type: Date,
   },

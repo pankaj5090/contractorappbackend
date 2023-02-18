@@ -4,56 +4,140 @@ const Work = require("../models/Work");
 const Employee = require("../models/Employee");
 const { body, validationResult } = require("express-validator");
 const mongoose = require("mongoose");
+const multer = require("multer");
+const { v4: uuidv4 } = require("uuid");
+let path = require("path");
+const fs = require("fs");
+const { fdrPath } = require("../config");
+
+//use of multer to upload file
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    if (file.fieldname === "fdrFile") {
+      req.origFdrFile = file.originalname;
+      cb(null, fdrPath);
+    }
+  },
+  filename: function (req, file, cb) {
+    cb(null, uuidv4() + "-" + Date.now() + path.extname(file.originalname));
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedFileTypes = ["image/jpeg", "image/jpg", "image/png"];
+  if (allowedFileTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    //req.fileValidationError = "Only jpeg|jpg|png file type are allowed!";
+    cb(new Error("Only jpeg|jpg|png file type are allowed!"), false);
+  }
+};
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 3000000,
+  },
+  fileFilter,
+}).fields([
+  {
+    name: "fdrFile",
+    maxCount: 1,
+  },
+]);
+
+const validateWork = [
+  //all the validation here
+  //all the validation here
+  body("name", "Name should be minimum 3 characters long").isLength({
+    min: 3,
+  }),
+  //all the validation here
+  body("allottedDate", "Please enter Allotment Date").isLength({
+    min: 10,
+  }),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      deleteFiles(req);
+      return res.status(400).json({ errors: errors.array() });
+    }
+    next();
+  },
+];
+function deleteFiles(req) {
+  if (req.files && req.files.fdrFile && req.files.fdrFile[0]) {
+    const fdrFilePath = req.files.fdrFile[0].path;
+    console.log(fdrFilePath);
+    fs.unlink(fdrFilePath, (err) => {
+      if (err) {
+        console.log(`error on removing files: ${fdrFilePath}`);
+      }
+      console.log(`succesfully deleted : ${fdrFilePath}`);
+    });
+  }
+}
+
+function deleteFile(filePath) {
+  fs.unlink(filePath, (err) => {
+    if (err) {
+      console.log(`error on removing files: ${filePath}`);
+    }
+    console.log(`successfully deleted ${filePath}`);
+  });
+}
 
 //with this request an work will be created.
 router.post(
   "/add",
-  [
-    //all the validation here
-    body("newWork.name", "Name should be minimum 3 characters long").isLength({
-      min: 3,
-    }),
-    //all the validation here
-    body("newWork.allottedDate", "Please enter Allotment Date").isLength({
-      min: 10,
-    }),
-  ],
+  upload,
+  validateWork,
   async (req, res) => {
-    // Finds the validation errors in this request and wraps them in an object with handy functions
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    if (req.fileValidationError) {
+      console.log("error in file upload");
     }
-
     try {
-      var newWork = req.body.newWork;
       let work = await Work.findOne({
-        name: newWork.name,
+        name: req.body.name,
       });
       var errorList = [""];
       if (work) {
         errorList.push("Work is already exists");
+        deleteFiles(req);
         return res.status(400).json({ errorlist: errorList });
       }
+
+      var fdrFilePath = "";
+      if (req.files && req.files.fdrFile && req.files.fdrFile[0]) {
+        fdrFilePath = req.files.fdrFile[0].filename;
+      }
+
       work = await Work.create({
-        name: newWork.name,
-        division: newWork.division,
-        allottedDate: newWork.allottedDate,
-        fdrBankGuaranteeNo: newWork.fdrBankGuaranteeNo,
-        guaranteeAmount: newWork.guaranteeAmount,
-        estimatedCost: newWork.estimatedCost,
-        contractorCost: newWork.contractorCost,
-        acceptedCost: newWork.acceptedCost,
-        percentageTender: newWork.percentageTender,
-        timeAllowed: newWork.timeAllowed,
+        name: req.body.name,
+        division: req.body.division,
+        allottedDate: req.body.allottedDate,
+        fdrBankGuaranteeNo: req.body.fdrBankGuaranteeNo,
+        guaranteeAmount: req.body.guaranteeAmount,
+        estimatedCost: req.body.estimatedCost,
+        contractorCost: req.body.contractorCost,
+        acceptedCost: req.body.acceptedCost,
+        percentageTender: req.body.percentageTender,
+        timeAllowed: req.body.timeAllowed,
+        origFdrFile: req.origFdrFile,
+        fdrFile: fdrFilePath,
         createdDate: Date.now(),
         updatedDate: Date.now(),
       });
       res.json(work);
     } catch (error) {
       console.error(error.message);
+      deleteFiles(req);
       res.status(500).send("Something went wrong");
     }
+  },
+  function (err, req, res, next) {
+    //File upload encountered an error as returned by multer
+    console.log("multer error come");
+    res.status(400).json({ multerError: err.message });
   }
 );
 //with this request all work will be returned where isDeleted=false
@@ -67,44 +151,75 @@ router.get("/get", async (req, resp) => {
   }
 });
 
-router.post("/update", async (req, resp) => {
-  try {
-    var newWork = req.body.newWork;
-    const updateWork = {
-      _id: newWork.id,
-      name: newWork.name,
-      division: newWork.division,
-      allottedDate: newWork.allottedDate,
-      fdrBankGuaranteeNo: newWork.fdrBankGuaranteeNo,
-      fdrBankName: newWork.fdrBankName,
-      guaranteeAmount: newWork.guaranteeAmount,
-      estimatedCost: newWork.estimatedCost,
-      contractorCost: newWork.contractorCost,
-      acceptedCost: newWork.acceptedCost,
-      percentageTender: newWork.percentageTender,
-      timeAllowed: newWork.timeAllowed,
-      updatedDate: Date.now(),
-    };
-    let work = await Work.findByIdAndUpdate(
-      newWork.id,
-      {
-        $set: updateWork,
-      },
-      { new: true }
-    );
-    if (!work) {
-      resp.status(404).send("Work not found");
+router.post(
+  "/update",
+  upload,
+  validateWork,
+  async (req, res) => {
+    if (req.fileValidationError) {
+      console.log("error in file upload");
     }
-    resp.json(work);
-  } catch (error) {
-    console.error(error.message);
-    resp.status(500).send("Something went wrong");
+    try {
+      let workFound = await Work.findOne({
+        _id: req.body.id,
+        isDeleted: false,
+      });
+      console.log("work found " + workFound);
+      var fdrFilePath = "";
+      var origFdrFile = "";
+      if (req.files && req.files.fdrFile && req.files.fdrFile[0]) {
+        fdrFilePath = req.files.fdrFile[0].filename;
+        origFdrFile = req.origFdrFile;
+        if (workFound.fdrFile) {
+          deleteFile(fdrPath + workFound.fdrFile);
+        }
+      } else {
+        fdrFilePath = workFound.fdrFile;
+        origFdrFile = workFound.origFdrFile;
+      }
+      let work = await Work.findByIdAndUpdate(
+        req.body.id,
+        {
+          $set: {
+            name: req.body.name,
+            division: req.body.division,
+            allottedDate: req.body.allottedDate,
+            fdrBankGuaranteeNo: req.body.fdrBankGuaranteeNo,
+            guaranteeAmount: req.body.guaranteeAmount,
+            estimatedCost: req.body.estimatedCost,
+            contractorCost: req.body.contractorCost,
+            acceptedCost: req.body.acceptedCost,
+            percentageTender: req.body.percentageTender,
+            timeAllowed: req.body.timeAllowed,
+            origFdrFile: origFdrFile,
+            fdrFile: fdrFilePath,
+            updatedDate: Date.now(),
+          },
+        },
+        { new: true }
+      );
+      if (!work) {
+        deleteFiles(req);
+        res.status(404).send("Work not found");
+      }
+      res.json(work);
+    } catch (error) {
+      console.error(error.message);
+      deleteFiles(req);
+      res.status(500).send("Something went wrong");
+    }
+  },
+  function (err, req, res, next) {
+    //File upload encountered an error as returned by multer
+    console.log("multer error come");
+    res.status(400).json({ multerError: err.message });
   }
-});
+);
 
 //with this request isDeleted will be set to true for an work- soft delete
 router.post("/delete/:id", async (req, resp) => {
   try {
+    let workForFileDelete = await Work.findById(req.params.id);
     let work = await Work.findByIdAndUpdate(
       req.params.id,
       {
@@ -114,6 +229,11 @@ router.post("/delete/:id", async (req, resp) => {
     );
     if (!work) {
       resp.status(404).send("Work not found");
+    }
+    if (workForFileDelete && workForFileDelete.fdrFile) {
+      const pathFdrFile = fdrPath + workForFileDelete.fdrFile;
+      console.log(pathFdrFile);
+      deleteFile(pathFdrFile);
     }
     resp.json(work);
   } catch (error) {
@@ -125,12 +245,24 @@ router.post("/delete/:id", async (req, resp) => {
 //with this request isDeleted will be set to true for multiple works- soft delete
 router.post("/deleteMany", async (req, resp) => {
   try {
+    let worksForFileDelete = await Work.find({
+      _id: { $in: req.body.ids },
+    });
     const deletedw = await Work.updateMany(
       { _id: { $in: req.body.ids } },
       { $set: { isDeleted: true } }
     );
     if (!deletedw) {
       resp.status(404).send("Work not found");
+    }
+    if (worksForFileDelete) {
+      worksForFileDelete.forEach((workForFileDelete) => {
+        if (workForFileDelete.fdrFile) {
+          const pathfdrFile = fdrPath + workForFileDelete.fdrFile;
+          console.log(pathfdrFile);
+          deleteFile(pathfdrFile);
+        }
+      });
     }
     resp.json(deletedw);
   } catch (error) {

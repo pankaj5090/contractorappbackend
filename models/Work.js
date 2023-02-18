@@ -39,6 +39,12 @@ const WorkSchema = new Schema({
   timeAllowed: {
     type: String,
   },
+  origFdrFile: {
+    type: String,
+  },
+  fdrFile: {
+    type: String,
+  },
   createdDate: {
     type: Date,
   },
