@@ -1,8 +1,8 @@
 const dotenv = require("dotenv");
 dotenv.config();
 module.exports = {
-  aadharPath: process.env.aadharPath,
-  passBookPath: process.env.passBookPath,
-  fdrPath: process.env.fdrPath,
-  appPort: process.env.appPort,
+  aadharPath: "C:/contractor_app/images/aadhar/",
+  passBookPath: "C:/contractor_app/images/passbook/",
+  fdrPath: "C:/contractor_app/images/fdr/",
+  appPort: 5000,
 };

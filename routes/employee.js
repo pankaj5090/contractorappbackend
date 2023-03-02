@@ -27,11 +27,17 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedFileTypes = ["image/jpeg", "image/jpg", "image/png"];
+  console.log(file.mimetype);
+  const allowedFileTypes = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "application/pdf",
+  ];
   if (allowedFileTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    //req.fileValidationError = "Only jpeg|jpg|png file type are allowed!";
+    //req.fileValidationError = "Only jpeg|jpg|png|pdf file type are allowed!";
     cb(new Error("Only jpeg|jpg|png file type are allowed!"), false);
   }
 };
@@ -126,6 +132,17 @@ router.post(
         deleteFiles(req);
         return res.status(400).json({ errorlist: errorList });
       }
+      //check for account
+      let employeeAccount = await Employee.findOne({
+        accountNumber: req.body.account,
+        isDeleted: false,
+      });
+      if (employeeAccount) {
+        errorList.push("Account  Number is already exists");
+        deleteFiles(req);
+        return res.status(400).json({ errorlist: errorList });
+      }
+
       var aadharFilePath = "";
       var passBookFilePath = "";
       if (req.files && req.files.aadharFile && req.files.aadharFile[0]) {
@@ -185,7 +202,7 @@ router.post(
     }
     try {
       let employeeFound = await Employee.findOne({
-        aadharCardNumber: req.body.aadhar,
+        _id: req.body.id,
         isDeleted: false,
       });
       var aadharFilePath = "";

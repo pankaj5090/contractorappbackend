@@ -5,11 +5,11 @@ const WorkSchema = new Schema({
   name: {
     type: String,
     required: true,
+    unique: true,
   },
   division: {
     type: String,
     required: true,
-    unique: true,
   },
   allottedDate: {
     type: Date,
